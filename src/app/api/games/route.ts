@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { getGameAnalysisCollection } from "@/lib/mongodb";
+import { createGameAnalysisDocument } from "@/lib/schemas";
 
 interface ProcessedGame {
   id: string;
@@ -162,10 +164,25 @@ export async function GET(request: NextRequest) {
     // Limit to 10 games total
     selectedGames = selectedGames.slice(0, targetCount);
 
+    // Save all selected games to MongoDB
+    const collection = await getGameAnalysisCollection();
+    const savePromises = selectedGames.map(async (game) => {
+      const doc = createGameAnalysisDocument(game, username);
+      // Use upsert to avoid duplicates (update if exists, insert if not)
+      await collection.updateOne(
+        { gameId: game.id, username: username.toLowerCase() },
+        { $set: doc },
+        { upsert: true }
+      );
+    });
+    await Promise.all(savePromises);
+
     // Analyze the first game with Gemini API
     let analysis: string | null = null;
     let concepts: string[] = [];
     let opening: string | null = null;
+    let detailedAnalysis: string | null = null;
+    
     if (selectedGames.length > 0) {
       try {
         const firstGame = selectedGames[0];
@@ -260,10 +277,35 @@ Output format (JSON only):
               
               // Extract finalAnalysis, concepts, and opening
               analysis = parsedResponse.finalAnalysis || parsedResponse.detailedAnalysis || responseText;
+              detailedAnalysis = parsedResponse.detailedAnalysis || null;
               concepts = Array.isArray(parsedResponse.concepts) 
                 ? parsedResponse.concepts.slice(0, 5) // Limit to 5 concepts
                 : [];
               opening = parsedResponse.opening || null;
+              
+              // Save analysis to MongoDB for the first game
+              const analysisDoc = createGameAnalysisDocument(
+                firstGame,
+                username,
+                {
+                  finalAnalysis: analysis || undefined,
+                  detailedAnalysis: detailedAnalysis || undefined,
+                  opening: opening || undefined,
+                  concepts: concepts.length > 0 ? concepts : undefined,
+                },
+                pgn
+              );
+              
+              await collection.updateOne(
+                { gameId: firstGame.id, username: username.toLowerCase() },
+                { 
+                  $set: {
+                    ...analysisDoc,
+                    updatedAt: new Date(),
+                  }
+                },
+                { upsert: true }
+              );
             } catch (parseError) {
               console.error("❌ Failed to parse JSON response:", parseError);
               analysis = responseText;
