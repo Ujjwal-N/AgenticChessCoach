@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Image from "next/image";
+import ReactMarkdown from "react-markdown";
 
 interface Game {
   id: string;
@@ -29,6 +30,9 @@ interface Game {
 export default function Home() {
   const [username, setUsername] = useState("");
   const [games, setGames] = useState<Game[]>([]);
+  const [analysis, setAnalysis] = useState<string | null>(null);
+  const [concepts, setConcepts] = useState<string[]>([]);
+  const [opening, setOpening] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -41,12 +45,13 @@ export default function Home() {
     setLoading(true);
     setError(null);
     setGames([]);
+    setAnalysis(null);
+    setConcepts([]);
+    setOpening(null);
 
     try {
       const response = await fetch(`/api/games?username=${encodeURIComponent(username)}`);
       const data = await response.json();
-
-      console.log(data);
 
       if (!response.ok) {
         setError(data.error || "Failed to fetch games");
@@ -54,6 +59,9 @@ export default function Home() {
       }
 
       setGames(data.games || []);
+      setAnalysis(data.analysis || null);
+      setConcepts(data.concepts || []);
+      setOpening(data.opening || null);
     } catch (err) {
       setError("An error occurred while fetching games");
       console.error(err);
@@ -125,6 +133,39 @@ export default function Home() {
         {error && (
           <div className="w-full max-w-md rounded-lg bg-red-100 border border-red-300 px-4 py-3 text-red-700 dark:bg-red-900/20 dark:border-red-800 dark:text-red-400">
             {error}
+          </div>
+        )}
+
+        {analysis && (
+          <div className="w-full mt-4">
+            <h2 className="text-2xl font-semibold text-black dark:text-zinc-50 mb-4">
+              Game Analysis
+            </h2>
+            {opening && (
+              <div className="mb-3">
+                <span className="text-sm font-semibold text-zinc-600 dark:text-zinc-400 mr-2">Opening:</span>
+                <span className="px-3 py-1 rounded-full text-sm font-medium bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
+                  {opening}
+                </span>
+              </div>
+            )}
+            {concepts.length > 0 && (
+              <div className="mb-4 flex flex-wrap gap-2">
+                {concepts.map((concept, index) => (
+                  <span
+                    key={index}
+                    className="px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300 border border-blue-200 dark:border-blue-800"
+                  >
+                    {concept}
+                  </span>
+                ))}
+              </div>
+            )}
+            <div className="rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-6">
+              <div className="prose prose-sm max-w-none dark:prose-invert text-zinc-700 dark:text-zinc-300">
+                <ReactMarkdown>{analysis}</ReactMarkdown>
+              </div>
+            </div>
           </div>
         )}
 

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 interface ProcessedGame {
   id: string;
@@ -161,12 +162,133 @@ export async function GET(request: NextRequest) {
     // Limit to 10 games total
     selectedGames = selectedGames.slice(0, targetCount);
 
+    // Analyze the first game with Gemini API
+    let analysis: string | null = null;
+    let concepts: string[] = [];
+    let opening: string | null = null;
+    if (selectedGames.length > 0) {
+      try {
+        const firstGame = selectedGames[0];
+        
+        // Fetch PGN for the first game
+        const pgnResponse = await fetch(
+          `https://lichess.org/game/export/${firstGame.id}.pgn`,
+          {
+            headers: {
+              Accept: "application/x-chess-pgn",
+            },
+          }
+        );
+
+        if (pgnResponse.ok) {
+          const pgn = await pgnResponse.text();
+          
+          // Initialize Gemini API
+          const apiKey = process.env.GEMINI_API_KEY;
+          
+          if (apiKey) {
+            const genAI = new GoogleGenerativeAI(apiKey);
+            const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+
+            const userColor = firstGame.userColor || "white";
+            const userColorCapitalized = userColor.charAt(0).toUpperCase() + userColor.slice(1);
+            
+            const prompt = `I'm going to give you a chess game for analysis.
+
+1) **Game in PGN format:**
+
+${pgn}
+
+**IMPORTANT:** Focus your analysis specifically on the player **${username}** who played as **${userColorCapitalized}**. This is the player whose weaknesses, blind spots, and learning areas you need to identify. Throughout your analysis, emphasize ${userColorCapitalized}'s moves and decisions, as ${username} was the ${userColorCapitalized} player in this game.
+
+**Your task:**
+
+Critically analyze this game to identify **${username}'s** (the ${userColorCapitalized} player) weaknesses, blind spots, and areas for improvement. Focus exclusively on their moves and decisions throughout the game.
+
+**Primary focus areas:**
+
+- **Weaknesses and mistakes**: Identify specific tactical errors, positional mistakes, and strategic blunders made by ${username} (${userColorCapitalized}). What types of mistakes do they repeatedly make?
+
+- **Blind spots**: What patterns or threats does ${username} (${userColorCapitalized}) consistently miss? Are there recurring tactical patterns they fail to see? Do they miss defensive resources or attacking opportunities?
+
+- **Learning areas**: What specific skills does ${username} (${userColorCapitalized}) need to develop? Identify concrete areas for improvement such as:
+  * Calculation and tactics
+  * Positional understanding
+  * Endgame technique
+  * Time management
+  * Opening preparation
+  * Pawn structure handling
+  * King safety awareness
+
+- **Patterns of weakness**: Analyze if ${username} (${userColorCapitalized}) struggles more in:
+  * Complex vs. simple positions
+  * Attacking vs. defending
+  * Open vs. closed positions
+  * Time pressure situations
+
+- **Critical moments**: Identify the key mistakes and missed opportunities that cost ${username} (${userColorCapitalized}) the most. What should they have done differently?
+
+Be specific and constructive. Point out exact moves or positions where ${username} (${userColorCapitalized}) went wrong and explain what they should have done instead.
+
+**CRITICAL:** You must respond with ONLY valid JSON. No markdown code blocks, no explanations, just pure JSON.
+
+Output format (JSON only):
+
+{
+  "detailedAnalysis": "Comprehensive critical analysis covering: 1. Weaknesses and mistakes (specific errors and tactical/positional mistakes made by ${username} (${userColorCapitalized})), 2. Blind spots (patterns and threats consistently missed), 3. Learning areas (concrete skills needing development), 4. Patterns of weakness (when and where ${username} (${userColorCapitalized}) struggles most), 5. Critical moments (key mistakes and missed opportunities that mattered most)",
+  "finalAnalysis": "3-5 simple sentences in markdown format highlighting ${username}'s (${userColorCapitalized}) main weaknesses, blind spots, and most important learning areas. Be specific and constructive. Use markdown formatting like **bold** for emphasis on key weaknesses, but keep it simple and readable.",
+  "opening": "The exact opening name played in this game. Be specific with variations if applicable. Examples: 'Sicilian Defense: Najdorf Variation', 'Queen's Gambit Declined', 'King's Indian Defense: Classical Variation', 'Ruy Lopez: Berlin Defense'. Return as a single string.",
+  "concepts": ["Return EXACTLY 5 chess concepts/tags that are highly specific and information-dense. DO NOT include opening names here - those go in the 'opening' field. Avoid generic terms like 'tactics', 'strategy', 'positional play', 'endgame'. Instead, use precise, specific concepts that actually appeared in this game. Examples of good tags: 'Same-side castling attack', 'Rook and pawn vs rook endgame', 'Back rank weakness exploitation', 'Weak d6 square complex', 'Isolated queen pawn structure', 'Knight outpost on d5', 'Pawn storm on kingside', 'Exchange sacrifice for initiative', 'Central pawn break', 'Piece coordination'. Examples of BAD tags to avoid: 'Chess tactics', 'Positional play', 'Endgame', 'Strategy', 'Middlegame', any opening names. Select the 5 most important and specific concepts that were actually relevant to this game. Return as an array of exactly 5 strings."]
+}`;
+
+            const result = await model.generateContent(prompt);
+            
+            const response = await result.response;
+            const responseText = response.text();
+            
+            // Parse JSON response
+            try {
+              // Remove markdown code blocks if present
+              let jsonText = responseText.trim();
+              if (jsonText.startsWith("```json")) {
+                jsonText = jsonText.replace(/^```json\s*/, "").replace(/\s*```$/, "");
+              } else if (jsonText.startsWith("```")) {
+                jsonText = jsonText.replace(/^```\s*/, "").replace(/\s*```$/, "");
+              }
+              
+              const parsedResponse = JSON.parse(jsonText);
+              
+              // Extract finalAnalysis, concepts, and opening
+              analysis = parsedResponse.finalAnalysis || parsedResponse.detailedAnalysis || responseText;
+              concepts = Array.isArray(parsedResponse.concepts) 
+                ? parsedResponse.concepts.slice(0, 5) // Limit to 5 concepts
+                : [];
+              opening = parsedResponse.opening || null;
+            } catch (parseError) {
+              console.error("❌ Failed to parse JSON response:", parseError);
+              analysis = responseText;
+            }
+          }
+        }
+      } catch (error) {
+        console.error("❌ Error analyzing game with Gemini:", error);
+        if (error instanceof Error) {
+          console.error("❌ Error message:", error.message);
+          console.error("❌ Error stack:", error.stack);
+        }
+        // Continue without analysis if Gemini fails
+      }
+    }
+
     return NextResponse.json({
       games: selectedGames,
       count: selectedGames.length,
       wins: wins.length,
       losses: losses.length,
       draws: draws.length,
+      analysis,
+      concepts,
+      opening,
     });
   } catch (error) {
     console.error("Error fetching Lichess games:", error);
