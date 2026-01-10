@@ -2,6 +2,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { getGameAnalysisCollection } from "@/lib/mongodb";
 import { createGameAnalysisDocument } from "@/lib/schemas";
 import { FatalError } from "workflow";
+import { synthesizeUserAnalysisWorkflow } from "./synthesize-user-analysis";
 
 interface GameAnalysisInput {
   gameId: string;
@@ -59,7 +60,26 @@ ${pgn}
 
 **Your task:**
 
-Critically analyze this game to identify **${username}'s** (the ${userColorCapitalized} player) weaknesses, blind spots, and areas for improvement. Focus exclusively on their moves and decisions throughout the game.
+First, evaluate whether this game is representative of **${username}'s** (${userColorCapitalized}) skill level and suitable for meaningful analysis. Then, if the game is representative, critically analyze it to identify weaknesses, blind spots, and areas for improvement.
+
+**Step 1: Evaluate Game Representativeness**
+
+Before analyzing, determine if this game should be considered for analysis. A game is NOT representative and should be marked as false if:
+
+- **Too short**: The game ended too quickly (e.g., fewer than 15-20 moves) due to early blunders, resignations, or timeouts that don't reflect normal play
+- **Opponent played weakly**: The opponent made obvious blunders, played significantly below their rating level, or made moves that suggest they weren't trying (e.g., multiple one-move blunders, hanging pieces repeatedly)
+- **Abnormal circumstances**: The game ended due to external factors rather than chess skill (e.g., connection issues, accidental resignations, extreme time pressure that's not typical)
+- **Unrated or casual play**: The game was clearly not serious competitive play
+
+A game IS representative if:
+- It lasted a reasonable number of moves (typically 20+ moves)
+- Both players played at a level consistent with their ratings
+- The game reflects normal competitive chess play
+- The outcome was determined by chess skill rather than external factors
+
+**Step 2: Analyze the Game (if representative)**
+
+If the game is representative, critically analyze it to identify **${username}'s** (the ${userColorCapitalized} player) weaknesses, blind spots, and areas for improvement. Focus exclusively on their moves and decisions throughout the game.
 
 **Primary focus areas:**
 
@@ -91,10 +111,11 @@ Be specific and constructive. Point out exact moves or positions where ${usernam
 Output format (JSON only):
 
 {
-  "detailedAnalysis": "Comprehensive critical analysis covering: 1. Weaknesses and mistakes (specific errors and tactical/positional mistakes made by ${username} (${userColorCapitalized})), 2. Blind spots (patterns and threats consistently missed), 3. Learning areas (concrete skills needing development), 4. Patterns of weakness (when and where ${username} (${userColorCapitalized}) struggles most), 5. Critical moments (key mistakes and missed opportunities that mattered most)",
-  "finalAnalysis": "3-5 simple sentences in markdown format highlighting ${username}'s (${userColorCapitalized}) main weaknesses, blind spots, and most important learning areas. Be specific and constructive. Use markdown formatting like **bold** for emphasis on key weaknesses, but keep it simple and readable.",
-  "opening": "The exact opening name played in this game. Be specific with variations if applicable. Examples: 'Sicilian Defense: Najdorf Variation', 'Queen's Gambit Declined', 'King's Indian Defense: Classical Variation', 'Ruy Lopez: Berlin Defense'. Return as a single string.",
-  "concepts": ["Return EXACTLY 5 chess concepts/tags that are highly specific and information-dense. DO NOT include opening names here - those go in the 'opening' field. Avoid generic terms like 'tactics', 'strategy', 'positional play', 'endgame'. Instead, use precise, specific concepts that actually appeared in this game. Examples of good tags: 'Same-side castling attack', 'Rook and pawn vs rook endgame', 'Back rank weakness exploitation', 'Weak d6 square complex', 'Isolated queen pawn structure', 'Knight outpost on d5', 'Pawn storm on kingside', 'Exchange sacrifice for initiative', 'Central pawn break', 'Piece coordination'. Examples of BAD tags to avoid: 'Chess tactics', 'Positional play', 'Endgame', 'Strategy', 'Middlegame', any opening names. Select the 5 most important and specific concepts that were actually relevant to this game. Return as an array of exactly 5 strings."]
+  "isRepresentative": true or false, // Boolean indicating if this game is representative of the user's skill level and suitable for analysis. Set to false if the game is too short, opponent played weakly, or other factors make it unsuitable for meaningful analysis.
+  "detailedAnalysis": "If isRepresentative is true: Comprehensive critical analysis covering: 1. Weaknesses and mistakes (specific errors and tactical/positional mistakes made by ${username} (${userColorCapitalized})), 2. Blind spots (patterns and threats consistently missed), 3. Learning areas (concrete skills needing development), 4. Patterns of weakness (when and where ${username} (${userColorCapitalized}) struggles most), 5. Critical moments (key mistakes and missed opportunities that mattered most). If isRepresentative is false: Brief explanation of why the game is not representative (e.g., 'Game ended too early due to early blunder', 'Opponent played significantly below their rating level', etc.)",
+  "finalAnalysis": "If isRepresentative is true: 3-5 simple sentences in markdown format highlighting ${username}'s (${userColorCapitalized}) main weaknesses, blind spots, and most important learning areas. Be specific and constructive. Use markdown formatting like **bold** for emphasis on key weaknesses, but keep it simple and readable. If isRepresentative is false: A brief note explaining why this game is not suitable for analysis.",
+  "opening": "The exact opening name played in this game. Be specific with variations if applicable. Examples: 'Sicilian Defense: Najdorf Variation', 'Queen's Gambit Declined', 'King's Indian Defense: Classical Variation', 'Ruy Lopez: Berlin Defense'. Return as a single string. If isRepresentative is false, still return the opening name if identifiable.",
+  "concepts": ["If isRepresentative is true: Return EXACTLY 5 chess concepts/tags that are highly specific and information-dense. DO NOT include opening names here - those go in the 'opening' field. Avoid generic terms like 'tactics', 'strategy', 'positional play', 'endgame'. Instead, use precise, specific concepts that actually appeared in this game. Examples of good tags: 'Same-side castling attack', 'Rook and pawn vs rook endgame', 'Back rank weakness exploitation', 'Weak d6 square complex', 'Isolated queen pawn structure', 'Knight outpost on d5', 'Pawn storm on kingside', 'Exchange sacrifice for initiative', 'Central pawn break', 'Piece coordination'. Examples of BAD tags to avoid: 'Chess tactics', 'Positional play', 'Endgame', 'Strategy', 'Middlegame', any opening names. Select the 5 most important and specific concepts that were actually relevant to this game. Return as an array of exactly 5 strings. If isRepresentative is false: Return an empty array []."]
 }`;
 
   const result = await model.generateContent(prompt);
@@ -120,6 +141,9 @@ Output format (JSON only):
         ? parsedResponse.concepts.slice(0, 5)
         : [],
       opening: parsedResponse.opening || null,
+      isRepresentative: parsedResponse.isRepresentative !== undefined 
+        ? Boolean(parsedResponse.isRepresentative)
+        : true, // Default to true if not provided for backward compatibility
     };
   } catch (parseError) {
     // If parsing fails, return the raw text as finalAnalysis
@@ -128,6 +152,7 @@ Output format (JSON only):
       detailedAnalysis: null,
       concepts: [],
       opening: null,
+      isRepresentative: true, // Default to true if parsing fails
     };
   }
 }
@@ -141,6 +166,7 @@ export async function saveAnalysisToMongoDB(
     detailedAnalysis: string | null;
     concepts: string[];
     opening: string | null;
+    isRepresentative: boolean;
   },
   pgn: string
 ) {
@@ -156,6 +182,7 @@ export async function saveAnalysisToMongoDB(
       detailedAnalysis: analysis.detailedAnalysis || undefined,
       opening: analysis.opening || undefined,
       concepts: analysis.concepts.length > 0 ? analysis.concepts : undefined,
+      isRepresentative: analysis.isRepresentative,
     },
     pgn
   );
@@ -188,6 +215,13 @@ export async function analyzeGameWorkflow(input: GameAnalysisInput) {
   
   // Step 3: Save to MongoDB (with automatic retry)
   await saveAnalysisToMongoDB(game, username, analysis, pgn);
+  
+  // Step 4: Trigger user synthesis workflow (non-blocking, runs in background)
+  // This will check if 3+ games have analysis and synthesize if so
+  synthesizeUserAnalysisWorkflow({ username }).catch((error) => {
+    // Log errors but don't fail the game analysis workflow
+    console.error(`❌ Error in user synthesis workflow for ${username}:`, error);
+  });
   
   return {
     success: true,

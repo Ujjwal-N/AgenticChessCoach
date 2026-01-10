@@ -62,6 +62,7 @@ export interface GameAnalysisDocument {
     detailedAnalysis?: string; // Comprehensive analysis
     opening?: string; // Opening name from AI analysis (may differ from Lichess)
     concepts?: string[]; // Array of chess concepts/tags (max 5)
+    isRepresentative?: boolean; // Whether this game is representative of the user's skill level
     analyzedAt?: Date; // When the analysis was performed
   };
   
@@ -84,6 +85,7 @@ export function createGameAnalysisDocument(
     detailedAnalysis?: string;
     opening?: string;
     concepts?: string[];
+    isRepresentative?: boolean;
   },
   pgn?: string
 ): GameAnalysisDocument {
@@ -116,6 +118,113 @@ export function createGameAnalysisDocument(
     } : undefined,
     pgn: pgn,
     storedAt: now,
+  };
+}
+
+/**
+ * MongoDB Schema for User Analysis
+ * 
+ * This schema represents synthesized analysis across multiple games for a user.
+ * It aggregates insights from individual game analyses to provide a comprehensive
+ * view of the user's chess playing patterns, strengths, and weaknesses.
+ */
+export interface UserAnalysisDocument {
+  // User identifier
+  username: string;
+  
+  // Synthesized Analysis
+  detailedAnalysis?: string; // Comprehensive analysis synthesized from multiple games
+  summaryAnalysis?: string; // Short summary of overall strengths/weaknesses
+  
+  // Aggregated Tags/Concepts
+  tags?: string[]; // Aggregated chess concepts/tags from multiple games
+  commonOpenings?: string[]; // Most frequently played openings
+  commonConcepts?: string[]; // Most frequently encountered concepts
+  
+  // Game Statistics
+  gamesAnalyzed?: number; // Number of games included in this analysis
+  gameIds?: string[]; // IDs of games that contributed to this analysis
+  wins?: number;
+  losses?: number;
+  draws?: number;
+  
+  // Rating Information
+  averageRating?: number; // Average rating across analyzed games
+  ratingRange?: {
+    min?: number;
+    max?: number;
+  };
+  
+  // Time Control Preferences
+  preferredSpeed?: string; // Most common speed (blitz, rapid, classical)
+  preferredVariant?: string; // Most common variant
+  
+  // Strengths and Weaknesses (synthesized)
+  strengths?: string[]; // Key strengths identified across games
+  weaknesses?: string[]; // Key weaknesses identified across games
+  blindSpots?: string[]; // Common blind spots or patterns missed
+  
+  // Learning Areas
+  learningAreas?: string[]; // Areas for improvement identified
+  
+  // Metadata
+  createdAt: Date; // When this analysis was first created
+  updatedAt: Date; // When this analysis was last updated
+  lastGameAnalyzedAt?: Date; // Timestamp of the most recent game analyzed
+}
+
+/**
+ * Helper function to create a UserAnalysisDocument
+ */
+export function createUserAnalysisDocument(
+  username: string,
+  analysis: {
+    detailedAnalysis?: string;
+    summaryAnalysis?: string;
+    tags?: string[];
+    commonOpenings?: string[];
+    commonConcepts?: string[];
+    gamesAnalyzed?: number;
+    gameIds?: string[];
+    wins?: number;
+    losses?: number;
+    draws?: number;
+    averageRating?: number;
+    ratingRange?: { min?: number; max?: number };
+    preferredSpeed?: string;
+    preferredVariant?: string;
+    strengths?: string[];
+    weaknesses?: string[];
+    blindSpots?: string[];
+    learningAreas?: string[];
+    lastGameAnalyzedAt?: Date;
+  }
+): UserAnalysisDocument {
+  const now = new Date();
+  
+  return {
+    username: username.toLowerCase(),
+    detailedAnalysis: analysis.detailedAnalysis,
+    summaryAnalysis: analysis.summaryAnalysis,
+    tags: analysis.tags,
+    commonOpenings: analysis.commonOpenings,
+    commonConcepts: analysis.commonConcepts,
+    gamesAnalyzed: analysis.gamesAnalyzed,
+    gameIds: analysis.gameIds,
+    wins: analysis.wins,
+    losses: analysis.losses,
+    draws: analysis.draws,
+    averageRating: analysis.averageRating,
+    ratingRange: analysis.ratingRange,
+    preferredSpeed: analysis.preferredSpeed,
+    preferredVariant: analysis.preferredVariant,
+    strengths: analysis.strengths,
+    weaknesses: analysis.weaknesses,
+    blindSpots: analysis.blindSpots,
+    learningAreas: analysis.learningAreas,
+    createdAt: now,
+    updatedAt: now,
+    lastGameAnalyzedAt: analysis.lastGameAnalyzedAt,
   };
 }
 

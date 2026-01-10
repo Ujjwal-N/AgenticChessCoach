@@ -35,9 +35,27 @@ interface Game {
   } | null;
 }
 
+interface UserAnalysis {
+  overallStrengths?: string[];
+  recurringWeaknesses?: string[];
+  blindSpots?: string[];
+  learningAreas?: string[];
+  playingStyle?: string;
+  ratingAssessment?: string;
+  keyInsights?: string;
+  gamesAnalyzed?: number;
+  wins?: number;
+  losses?: number;
+  draws?: number;
+  commonOpenings?: string[];
+  commonConcepts?: string[];
+  synthesizedAt?: string | Date;
+}
+
 export default function Home() {
   const [username, setUsername] = useState("");
   const [games, setGames] = useState<Game[]>([]);
+  const [userAnalysis, setUserAnalysis] = useState<UserAnalysis | null>(null);
   const [loading, setLoading] = useState(false);
   const [polling, setPolling] = useState(false);
   const [gameCount, setGameCount] = useState<number | null>(null);
@@ -53,6 +71,23 @@ export default function Home() {
       }
     };
   }, []);
+
+  const pollUserAnalysis = async () => {
+    if (!username.trim()) return;
+
+    try {
+      console.log(`[Polling] Fetching user analysis for ${username}...`);
+      const response = await fetch(`/api/user-analysis?username=${encodeURIComponent(username)}`);
+      const data = await response.json();
+
+      if (response.ok && data.success && data.hasAnalysis) {
+        console.log(`[Polling] Received user analysis for ${username}`);
+        setUserAnalysis(data.analysis);
+      }
+    } catch (err) {
+      console.error("[Polling] Error fetching user analysis:", err);
+    }
+  };
 
   const pollGames = async () => {
     if (!username.trim()) return;
@@ -91,6 +126,7 @@ export default function Home() {
     setLoading(true);
     setError(null);
     setGames([]);
+    setUserAnalysis(null);
     setGameCount(null);
     setWithAnalysis(0);
 
@@ -118,8 +154,10 @@ export default function Home() {
 
       // Start polling immediately, then every 5 seconds
       pollGames();
+      pollUserAnalysis();
       pollingIntervalRef.current = setInterval(() => {
         pollGames();
+        pollUserAnalysis();
       }, 5000);
     } catch (err) {
       setError("An error occurred while fetching games");
@@ -225,6 +263,125 @@ export default function Home() {
           </div>
         )}
 
+        {userAnalysis && (
+          <div className="w-full mt-4">
+            <div className="rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-2xl font-semibold text-black dark:text-zinc-50">
+                  Player Profile Analysis
+                </h2>
+                {userAnalysis.gamesAnalyzed && (
+                  <span className="text-sm text-zinc-600 dark:text-zinc-400">
+                    Based on {userAnalysis.gamesAnalyzed} games
+                    {userAnalysis.wins !== undefined && userAnalysis.losses !== undefined && (
+                      <span className="ml-2">
+                        ({userAnalysis.wins}W / {userAnalysis.losses}L / {userAnalysis.draws || 0}D)
+                      </span>
+                    )}
+                  </span>
+                )}
+              </div>
+
+              {userAnalysis.keyInsights && (
+                <div className="mb-6 p-4 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
+                  <h3 className="font-semibold text-blue-900 dark:text-blue-100 mb-2">Key Insights</h3>
+                  <div className="prose prose-sm max-w-none dark:prose-invert text-blue-800 dark:text-blue-200">
+                    <ReactMarkdown>{String(userAnalysis.keyInsights || "")}</ReactMarkdown>
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                {userAnalysis.overallStrengths && userAnalysis.overallStrengths.length > 0 && (
+                  <div>
+                    <h3 className="font-semibold text-green-700 dark:text-green-400 mb-2">Overall Strengths</h3>
+                    <ul className="list-disc list-inside space-y-1 text-sm text-zinc-700 dark:text-zinc-300">
+                      {userAnalysis.overallStrengths.map((strength, index) => (
+                        <li key={index}>{String(strength || "")}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {userAnalysis.recurringWeaknesses && userAnalysis.recurringWeaknesses.length > 0 && (
+                  <div>
+                    <h3 className="font-semibold text-red-700 dark:text-red-400 mb-2">Recurring Weaknesses</h3>
+                    <ul className="list-disc list-inside space-y-1 text-sm text-zinc-700 dark:text-zinc-300">
+                      {userAnalysis.recurringWeaknesses.map((weakness, index) => (
+                        <li key={index}>{String(weakness || "")}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                {userAnalysis.blindSpots && userAnalysis.blindSpots.length > 0 && (
+                  <div>
+                    <h3 className="font-semibold text-orange-700 dark:text-orange-400 mb-2">Blind Spots</h3>
+                    <ul className="list-disc list-inside space-y-1 text-sm text-zinc-700 dark:text-zinc-300">
+                      {userAnalysis.blindSpots.map((spot, index) => (
+                        <li key={index}>{String(spot || "")}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {userAnalysis.learningAreas && userAnalysis.learningAreas.length > 0 && (
+                  <div>
+                    <h3 className="font-semibold text-purple-700 dark:text-purple-400 mb-2">Learning Priorities</h3>
+                    <ul className="list-disc list-inside space-y-1 text-sm text-zinc-700 dark:text-zinc-300">
+                      {userAnalysis.learningAreas.map((area, index) => (
+                        <li key={index}>{String(area || "")}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+
+              {userAnalysis.commonOpenings && userAnalysis.commonOpenings.length > 0 && (
+                <div className="mb-4">
+                  <h3 className="font-semibold text-zinc-700 dark:text-zinc-300 mb-2">Common Openings</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {userAnalysis.commonOpenings.map((opening, index) => (
+                      <span
+                        key={index}
+                        className="px-3 py-1 rounded-full text-sm font-medium bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300 border border-purple-200 dark:border-purple-800"
+                      >
+                        {String(opening || "")}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {userAnalysis.commonConcepts && userAnalysis.commonConcepts.length > 0 && (
+                <div className="mb-4">
+                  <h3 className="font-semibold text-zinc-700 dark:text-zinc-300 mb-2">Common Concepts</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {userAnalysis.commonConcepts.map((concept, index) => (
+                      <span
+                        key={index}
+                        className="px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300 border border-blue-200 dark:border-blue-800"
+                      >
+                        {String(concept || "")}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {userAnalysis.ratingAssessment && (
+                <div className="mt-4 pt-4 border-t border-zinc-200 dark:border-zinc-700">
+                  <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                    <strong>Rating Assessment:</strong> {String(userAnalysis.ratingAssessment || "")}
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {games.length > 0 && (
           <div className="w-full mt-4">
             <h2 className="text-2xl font-semibold text-black dark:text-zinc-50 mb-4">
@@ -273,7 +430,7 @@ export default function Home() {
                           <div className="flex items-center gap-2">
                             <span className="text-xs font-semibold text-zinc-600 dark:text-zinc-400">Opening:</span>
                             <span className="px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
-                              {game.analysis.opening}
+                              {String(game.analysis.opening || "")}
                             </span>
                           </div>
                         )}
@@ -285,7 +442,7 @@ export default function Home() {
                               key={index}
                               className="px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300 border border-blue-200 dark:border-blue-800"
                             >
-                              {concept}
+                              {String(concept || "")}
                             </span>
                           ))}
                         </div>
@@ -293,7 +450,7 @@ export default function Home() {
                       {game.analysis.finalAnalysis && (
                         <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 p-4">
                           <div className="prose prose-sm max-w-none dark:prose-invert text-zinc-700 dark:text-zinc-300">
-                            <ReactMarkdown>{game.analysis.finalAnalysis}</ReactMarkdown>
+                            <ReactMarkdown>{String(game.analysis.finalAnalysis || "")}</ReactMarkdown>
                           </div>
                         </div>
                       )}

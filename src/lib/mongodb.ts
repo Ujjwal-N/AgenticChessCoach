@@ -44,3 +44,9 @@ export async function getGameAnalysisCollection() {
   return db.collection('game_analysis');
 }
 
+// Helper function to get the user_analysis collection
+export async function getUserAnalysisCollection() {
+  const db = await getDatabase();
+  return db.collection('user_analysis');
+}
+
