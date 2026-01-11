@@ -1,36 +1,131 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Chess Game Analysis Platform
 
-## Getting Started
+A Next.js application that analyzes chess games from Lichess using AI to provide insights into player strengths, weaknesses, and playing patterns.
 
-First, run the development server:
+## Features
+
+- **Game Analysis**: Fetches and analyzes chess games from Lichess API
+- **AI-Powered Insights**: Uses Google Gemini AI to analyze games and identify patterns
+- **Player Profile**: Synthesizes analysis across multiple games to create comprehensive player profiles
+- **Look-Alike Detection**: Identifies games with similar thematic elements to original games
+- **Real-time Updates**: Polls for analysis completion and updates the UI automatically
+
+## Prerequisites
+
+- Node.js 18+ 
+- MongoDB Atlas account
+- Google Gemini API key
+- Lichess account (for testing)
+
+## Setup
+
+1. **Clone the repository**
+   ```bash
+   git clone <repository-url>
+   cd main_project
+   ```
+
+2. **Install dependencies**
+   ```bash
+   npm install
+   ```
+
+3. **Create environment variables**
+   
+   Create a `.env.local` file in the root directory with the following variables:
+   ```env
+   MONGODB_USERNAME=your_mongodb_username
+   MONGODB_PASSWORD=your_mongodb_password
+   GEMINI_API_KEY=your_gemini_api_key
+   ```
+
+   **Note**: The `.env*` files are gitignored and will not be committed to the repository.
+
+4. **Test MongoDB connection** (optional)
+   ```bash
+   # Start the dev server first, then visit:
+   http://localhost:3000/api/test-mongodb
+   ```
+
+## Running the Application
+
+### Development
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Production Build
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm run build
+npm start
+```
 
-## Learn More
+## How It Works
 
-To learn more about Next.js, take a look at the following resources:
+1. **Enter a Lichess username** in the input field
+2. **Fetch games**: The app fetches up to 100 games from the last 2 months
+3. **Select games**: Automatically selects 25 games (10 wins, 10 losses, 5 draws) for analysis
+4. **Analyze games**: Uses Vercel Workflows to analyze each game with Gemini AI in parallel
+5. **Synthesize profile**: After 3+ games are analyzed, creates a comprehensive player profile
+6. **Find look-alikes**: After 10 games, identifies games with similar thematic patterns
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Technology Stack
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- **Next.js 16** - React framework
+- **TypeScript** - Type safety
+- **MongoDB** - Database for game and analysis storage
+- **Google Gemini AI** - Game analysis and synthesis
+- **Vercel Workflows** - Background job processing with automatic retries
+- **Tailwind CSS** - Styling
+- **React Markdown** - Rendering analysis text
 
-## Deploy on Vercel
+## Project Structure
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```
+src/
+├── app/
+│   ├── api/
+│   │   ├── games/          # Fetch games from Lichess
+│   │   ├── check-analysis/  # Poll for analysis status
+│   │   ├── user-analysis/   # Get synthesized user profile
+│   │   └── test-mongodb/    # Test database connection
+│   ├── page.tsx             # Main UI component
+│   └── layout.tsx           # Root layout
+├── lib/
+│   ├── mongodb.ts           # Database connection
+│   ├── schemas.ts           # Data models
+│   └── workflows/
+│       ├── analyze-game.ts           # Analyze individual games
+│       ├── synthesize-user-analysis.ts # Create player profile
+│       └── lookalike-games.ts         # Find similar games
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## API Endpoints
+
+- `GET /api/games?username=<username>` - Fetch and start analyzing games
+- `GET /api/check-analysis?username=<username>` - Check analysis progress
+- `GET /api/user-analysis?username=<username>` - Get synthesized player profile
+- `GET /api/test-mongodb` - Test MongoDB connection
+
+## Environment Variables
+
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `MONGODB_USERNAME` | MongoDB Atlas username | Yes |
+| `MONGODB_PASSWORD` | MongoDB Atlas password | Yes |
+| `GEMINI_API_KEY` | Google Gemini API key | Yes |
+
+## Notes
+
+- The app analyzes up to 25 games per user
+- Analysis happens asynchronously using Vercel Workflows
+- The UI polls every 5 seconds for updates
+- Each user's data is isolated and stored separately in MongoDB
+
+## License
+
+Private project for hackathon demonstration.
