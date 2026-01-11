@@ -63,6 +63,11 @@ export interface GameAnalysisDocument {
     opening?: string; // Opening name from AI analysis (may differ from Lichess)
     concepts?: string[]; // Array of chess concepts/tags (max 5)
     isRepresentative?: boolean; // Whether this game is representative of the user's skill level
+    original?: boolean; // Whether this game is part of the first 10 games analyzed for this user
+    isValidLookAlike?: boolean; // Whether this non-original game displays thematic elements of original games
+    thematicMatch?: string; // Explanation of thematic elements that match original games
+    matchedOriginalGameIds?: string[]; // Array of original game IDs that this game resembles
+    thematicConnections?: string; // Specific chess concepts/patterns connecting this game to original games
     analyzedAt?: Date; // When the analysis was performed
   };
   
@@ -86,6 +91,11 @@ export function createGameAnalysisDocument(
     opening?: string;
     concepts?: string[];
     isRepresentative?: boolean;
+    original?: boolean;
+    isValidLookAlike?: boolean;
+    thematicMatch?: string;
+    matchedOriginalGameIds?: string[];
+    thematicConnections?: string;
   },
   pgn?: string
 ): GameAnalysisDocument {
@@ -140,6 +150,7 @@ export interface UserAnalysisDocument {
   tags?: string[]; // Aggregated chess concepts/tags from multiple games
   commonOpenings?: string[]; // Most frequently played openings
   commonConcepts?: string[]; // Most frequently encountered concepts
+  conceptGameIds?: Record<string, string[]>; // Mapping of concepts/tags to game IDs where they appear
   
   // Game Statistics
   gamesAnalyzed?: number; // Number of games included in this analysis
@@ -184,6 +195,7 @@ export function createUserAnalysisDocument(
     tags?: string[];
     commonOpenings?: string[];
     commonConcepts?: string[];
+    conceptGameIds?: Record<string, string[]>;
     gamesAnalyzed?: number;
     gameIds?: string[];
     wins?: number;
@@ -209,6 +221,7 @@ export function createUserAnalysisDocument(
     tags: analysis.tags,
     commonOpenings: analysis.commonOpenings,
     commonConcepts: analysis.commonConcepts,
+    conceptGameIds: analysis.conceptGameIds,
     gamesAnalyzed: analysis.gamesAnalyzed,
     gameIds: analysis.gameIds,
     wins: analysis.wins,

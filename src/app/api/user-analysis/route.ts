@@ -46,6 +46,7 @@ export async function GET(request: NextRequest) {
         draws: userAnalysis.draws,
         commonOpenings: userAnalysis.commonOpenings,
         commonConcepts: userAnalysis.commonConcepts,
+        conceptGameIds: userAnalysis.conceptGameIds,
         synthesizedAt: userAnalysis.updatedAt,
       },
     });

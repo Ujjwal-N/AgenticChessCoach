@@ -48,6 +48,7 @@ export async function synthesizeUserAnalysisWithGemini(
   const gameSummaries = games.map((game, index) => {
     const analysis = game.analysis || {};
     return {
+      gameId: game.gameId,
       gameNumber: index + 1,
       result: game.result,
       opening: analysis.opening || "Unknown",
@@ -63,7 +64,7 @@ export async function synthesizeUserAnalysisWithGemini(
 **Game Analyses:**
 
 ${gameSummaries.map((g, i) => `
-**Game ${g.gameNumber}:**
+**Game ${g.gameNumber} (ID: ${g.gameId}):**
 - Result: ${g.result}
 - Opening: ${g.opening}
 - Speed: ${g.speed}
@@ -82,6 +83,7 @@ Synthesize these individual game analyses into a comprehensive player profile fo
 4. **Learning Priorities**: Based on the patterns across all games, what should ${username} focus on improving first?
 5. **Playing Style**: What can you infer about ${username}'s playing style, preferences, and tendencies?
 6. **Rating Assessment**: Based on the quality of play and mistakes, what rating range does ${username} appear to be playing at?
+7. **Concept-to-Game Associations**: For each unique chess concept/tag that appears across the games, identify which specific game IDs demonstrate that concept. This helps track which games exemplify particular patterns or concepts.
 
 **CRITICAL:** You must respond with ONLY valid JSON. No markdown code blocks, no explanations, just pure JSON.
 
@@ -94,7 +96,19 @@ Output format (JSON only):
   "learningPriorities": "A prioritized list of what ${username} should focus on improving, ordered by importance and impact. Be specific and actionable.",
   "playingStyle": "A description of ${username}'s playing style, preferences, and tendencies based on the games analyzed.",
   "ratingAssessment": "An assessment of ${username}'s approximate rating level based on the quality of play observed.",
-  "keyInsights": "3-5 key insights or takeaways that summarize the most important findings about ${username}'s chess game."
+  "keyInsights": "3-5 key insights or takeaways that summarize the most important findings about ${username}'s chess game.",
+  "conceptGameIds": {
+    "concept_name": ["gameId1", "gameId2", ...],
+    ...
+  }
+}
+
+For "conceptGameIds", create an object where:
+- Each key is a chess concept/tag (e.g., "Back rank weakness", "Knight outpost", "Pawn storm")
+- Each value is an array of game IDs (as strings) where that concept was demonstrated or relevant
+- Include concepts that appear in multiple games or are particularly significant
+- Use the exact game IDs provided in the game summaries above
+- If a concept appears in a game, include that game's ID in the array for that concept
 }`;
 
   const result = await model.generateContent(prompt);
@@ -121,6 +135,7 @@ Output format (JSON only):
       playingStyle: parsedResponse.playingStyle || "",
       ratingAssessment: parsedResponse.ratingAssessment || "",
       keyInsights: parsedResponse.keyInsights || "",
+      conceptGameIds: parsedResponse.conceptGameIds || {},
     };
   } catch (parseError) {
     // If parsing fails, return a basic structure
@@ -132,6 +147,7 @@ Output format (JSON only):
       playingStyle: "",
       ratingAssessment: "",
       keyInsights: responseText.substring(0, 500), // Use first 500 chars as fallback
+      conceptGameIds: {},
     };
   }
 }
@@ -147,6 +163,7 @@ export async function saveUserAnalysisToMongoDB(
     playingStyle: string;
     ratingAssessment: string;
     keyInsights: string;
+    conceptGameIds: Record<string, string[]>;
   },
   gamesAnalyzed: number,
   games: any[]
@@ -226,6 +243,7 @@ export async function saveUserAnalysisToMongoDB(
     learningAreas: learningAreas.length > 0 ? learningAreas : (synthesis.learningPriorities ? [synthesis.learningPriorities] : []),
     commonOpenings: commonOpenings.length > 0 ? commonOpenings : undefined,
     commonConcepts: commonConcepts.length > 0 ? commonConcepts : undefined,
+    conceptGameIds: Object.keys(synthesis.conceptGameIds || {}).length > 0 ? synthesis.conceptGameIds : undefined,
     gamesAnalyzed: gamesAnalyzed,
     gameIds: games.map((g) => g.gameId),
     wins: wins,

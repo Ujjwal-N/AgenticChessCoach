@@ -132,15 +132,16 @@ export async function GET(request: NextRequest) {
     const losses = processedGames.filter((game) => game.result === "loss");
     const draws = processedGames.filter((game) => game.result === "draw");
 
-    // Select games: ideal split is 4 wins, 4 losses, 2 draws
-    const targetCount = 10;
+    // Select games: analyze 25 games with ideal split of 10 wins, 10 losses, 5 draws
+    const targetCount = 25;
+    const maxReturnCount = 15; // Maximum games to return to frontend
     let selectedGames: ProcessedGame[] = [];
     const selectedGameIds = new Set<string>();
     
-    // Determine how many of each type to take
-    const winsCount = Math.min(4, wins.length);
-    const lossesCount = Math.min(4, losses.length);
-    const drawsCount = Math.min(2, draws.length);
+    // Determine how many of each type to take (proportional to 25 games)
+    const winsCount = Math.min(10, wins.length);
+    const lossesCount = Math.min(10, losses.length);
+    const drawsCount = Math.min(5, draws.length);
     
     // Take wins, losses, and draws
     selectedGames = [
@@ -161,8 +162,11 @@ export async function GET(request: NextRequest) {
       additional.forEach((game) => selectedGameIds.add(game.id));
     }
 
-    // Limit to 10 games total
+    // Limit to 25 games total for analysis
     selectedGames = selectedGames.slice(0, targetCount);
+    
+    // Prepare games to return (limit to 15 max)
+    const gamesToReturn = selectedGames.slice(0, maxReturnCount);
 
     // Save all selected games to MongoDB
     const collection = await getGameAnalysisCollection();
@@ -195,6 +199,30 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       success: true,
       count: selectedGames.length,
+      gamesAnalyzed: selectedGames.length,
+      gamesReturned: gamesToReturn.length,
+      games: gamesToReturn.map((game) => ({
+        id: game.id,
+        gameId: game.id,
+        rated: game.rated,
+        variant: game.variant,
+        speed: game.speed,
+        perf: game.perf,
+        createdAt: game.createdAt,
+        lastMoveAt: game.lastMoveAt,
+        status: game.status,
+        winner: game.winner,
+        players: game.players,
+        opening: game.opening,
+        userColor: game.userColor,
+        userRating: game.userColor === "white" 
+          ? game.players.white?.rating 
+          : game.players.black?.rating,
+        opponentRating: game.opponentRating,
+        ratingDiff: game.ratingDiff,
+        duration: game.duration,
+        result: game.result,
+      })),
     });
   } catch (error) {
     console.error("Error fetching Lichess games:", error);

@@ -55,6 +55,12 @@ export async function GET(request: NextRequest) {
               detailedAnalysis: doc.analysis.detailedAnalysis,
               opening: doc.analysis.opening,
               concepts: doc.analysis.concepts,
+              isRepresentative: doc.analysis.isRepresentative,
+              original: doc.analysis.original,
+              isValidLookAlike: doc.analysis.isValidLookAlike,
+              thematicMatch: doc.analysis.thematicMatch,
+              matchedOriginalGameIds: doc.analysis.matchedOriginalGameIds,
+              thematicConnections: doc.analysis.thematicConnections,
               analyzedAt: doc.analysis.analyzedAt,
             }
           : null,

@@ -3,6 +3,7 @@ import { getGameAnalysisCollection } from "@/lib/mongodb";
 import { createGameAnalysisDocument } from "@/lib/schemas";
 import { FatalError } from "workflow";
 import { synthesizeUserAnalysisWorkflow } from "./synthesize-user-analysis";
+import { lookAlikeGamesWorkflow } from "./lookalike-games";
 
 interface GameAnalysisInput {
   gameId: string;
@@ -157,6 +158,20 @@ Output format (JSON only):
   }
 }
 
+// Step: Check how many games with analysis exist for this user
+export async function checkGamesCount(username: string) {
+  "use step";
+  
+  const collection = await getGameAnalysisCollection();
+  // Count only games that have completed analysis (have analysis.finalAnalysis)
+  const count = await collection.countDocuments({
+    username: username.toLowerCase(),
+    "analysis.finalAnalysis": { $exists: true, $ne: null },
+  });
+  
+  return count;
+}
+
 // Step: Save analysis to MongoDB
 export async function saveAnalysisToMongoDB(
   game: any,
@@ -168,7 +183,8 @@ export async function saveAnalysisToMongoDB(
     opening: string | null;
     isRepresentative: boolean;
   },
-  pgn: string
+  pgn: string,
+  original: boolean
 ) {
   "use step";
   
@@ -183,6 +199,7 @@ export async function saveAnalysisToMongoDB(
       opening: analysis.opening || undefined,
       concepts: analysis.concepts.length > 0 ? analysis.concepts : undefined,
       isRepresentative: analysis.isRepresentative,
+      original: original,
     },
     pgn
   );
@@ -213,15 +230,34 @@ export async function analyzeGameWorkflow(input: GameAnalysisInput) {
   // Step 2: Analyze with Gemini (with automatic retry)
   const analysis = await analyzeGameWithGemini(pgn, username, userColor);
   
-  // Step 3: Save to MongoDB (with automatic retry)
-  await saveAnalysisToMongoDB(game, username, analysis, pgn);
+  // Step 3: Check how many games exist for this user (before saving this one)
+  const gamesCountBefore = await checkGamesCount(username);
   
-  // Step 4: Trigger user synthesis workflow (non-blocking, runs in background)
+  // Step 4: Determine if this is an "original" game (part of first 10)
+  const original = gamesCountBefore < 10;
+  
+  // Step 5: Save to MongoDB (with automatic retry)
+  await saveAnalysisToMongoDB(game, username, analysis, pgn, original);
+  
+  // Step 6: Check count after saving to see if we just reached 10 games
+  const gamesCountAfter = await checkGamesCount(username);
+  
+  // Step 7: Trigger user synthesis workflow (non-blocking, runs in background)
   // This will check if 3+ games have analysis and synthesize if so
   synthesizeUserAnalysisWorkflow({ username }).catch((error) => {
     // Log errors but don't fail the game analysis workflow
     console.error(`❌ Error in user synthesis workflow for ${username}:`, error);
   });
+  
+  // Step 8: Trigger look-alike games workflow if we just reached 10 games or added a non-original game (non-blocking)
+  // This will process non-original games to find thematic matches
+  if (gamesCountAfter === 10 || (!original && gamesCountAfter > 10)) {
+    console.log(`[AnalyzeGame] Triggering look-alike workflow for ${username} (${gamesCountAfter} games analyzed, original=${original})`);
+    lookAlikeGamesWorkflow({ username }).catch((error) => {
+      // Log errors but don't fail the game analysis workflow
+      console.error(`❌ Error in look-alike games workflow for ${username}:`, error);
+    });
+  }
   
   return {
     success: true,
@@ -230,6 +266,7 @@ export async function analyzeGameWorkflow(input: GameAnalysisInput) {
       finalAnalysis: analysis.finalAnalysis,
       concepts: analysis.concepts,
       opening: analysis.opening,
+      original: original,
     },
   };
 }
