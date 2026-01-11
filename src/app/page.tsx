@@ -68,6 +68,7 @@ export default function Home() {
   const [withAnalysis, setWithAnalysis] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const currentPollingUsernameRef = useRef<string>(""); // Track which username we're polling for
 
   // Cleanup polling on unmount
   useEffect(() => {
@@ -79,16 +80,29 @@ export default function Home() {
   }, []);
 
   const pollUserAnalysis = async () => {
-    if (!username.trim()) return;
+    const pollingUsername = currentPollingUsernameRef.current;
+    if (!pollingUsername.trim()) return;
 
     try {
-      console.log(`[Polling] Fetching user analysis for ${username}...`);
-      const response = await fetch(`/api/user-analysis?username=${encodeURIComponent(username)}`);
-      const data = await response.json();
+      console.log(`[Polling] Fetching user analysis for ${pollingUsername}...`);
+      const response = await fetch(`/api/user-analysis?username=${encodeURIComponent(pollingUsername)}`);
+      
+      if (!response.ok) {
+        console.error(`[Polling] Error response: ${response.status}`);
+        return;
+      }
+      
+      const data = await response.json().catch((err) => {
+        console.error("[Polling] Failed to parse JSON:", err);
+        return { success: false };
+      });
 
       if (response.ok && data.success && data.hasAnalysis) {
-        console.log(`[Polling] Received user analysis for ${username}`);
-        setUserAnalysis(data.analysis);
+        console.log(`[Polling] Received user analysis for ${pollingUsername}`);
+        // Only update state if we're still polling for this username
+        if (currentPollingUsernameRef.current === pollingUsername) {
+          setUserAnalysis(data.analysis);
+        }
       }
     } catch (err) {
       console.error("[Polling] Error fetching user analysis:", err);
@@ -96,25 +110,39 @@ export default function Home() {
   };
 
   const pollGames = async () => {
-    if (!username.trim()) return;
+    const pollingUsername = currentPollingUsernameRef.current;
+    if (!pollingUsername.trim()) return;
 
     try {
-      console.log(`[Polling] Fetching games for ${username}...`);
-      const response = await fetch(`/api/check-analysis?username=${encodeURIComponent(username)}`);
-      const data = await response.json();
+      console.log(`[Polling] Fetching games for ${pollingUsername}...`);
+      const response = await fetch(`/api/check-analysis?username=${encodeURIComponent(pollingUsername)}`);
+      
+      if (!response.ok) {
+        console.error(`[Polling] Error response: ${response.status}`);
+        return;
+      }
+      
+      const data = await response.json().catch((err) => {
+        console.error("[Polling] Failed to parse JSON:", err);
+        return { success: false };
+      });
 
       if (response.ok && data.success) {
         console.log(`[Polling] Received ${data.games?.length || 0} games, ${data.withAnalysis || 0} with analysis`);
-        setGames(data.games || []);
-        setWithAnalysis(data.withAnalysis || 0);
+        // Only update state if we're still polling for this username
+        if (currentPollingUsernameRef.current === pollingUsername) {
+          setGames(data.games || []);
+          setWithAnalysis(data.withAnalysis || 0);
 
-        // Stop polling if all games have analysis
-        if (data.withAnalysis === data.count && data.count > 0) {
-          console.log("[Polling] All games analyzed, stopping poll");
-          setPolling(false);
-          if (pollingIntervalRef.current) {
-            clearInterval(pollingIntervalRef.current);
-            pollingIntervalRef.current = null;
+          // Stop polling if all games have analysis or if we've been polling for too long (5 minutes max)
+          if (data.withAnalysis === data.count && data.count > 0) {
+            console.log("[Polling] All games analyzed, stopping poll");
+            setPolling(false);
+            if (pollingIntervalRef.current) {
+              clearInterval(pollingIntervalRef.current);
+              pollingIntervalRef.current = null;
+            }
+            currentPollingUsernameRef.current = "";
           }
         }
       }
@@ -141,11 +169,27 @@ export default function Home() {
       clearInterval(pollingIntervalRef.current);
       pollingIntervalRef.current = null;
     }
+    currentPollingUsernameRef.current = ""; // Clear previous polling username
 
     try {
       console.log(`[API] Fetching games for ${username}...`);
       const response = await fetch(`/api/games?username=${encodeURIComponent(username)}`);
-      const data = await response.json();
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: "Failed to fetch games" }));
+        setError(errorData.error || `Failed to fetch games (${response.status})`);
+        setLoading(false);
+        return;
+      }
+      
+      const data = await response.json().catch((err) => {
+        console.error("[API] Failed to parse JSON:", err);
+        setError("Invalid response from server");
+        setLoading(false);
+        return null;
+      });
+      
+      if (!data) return;
 
       if (!response.ok) {
         setError(data.error || "Failed to fetch games");
@@ -154,9 +198,19 @@ export default function Home() {
       }
 
       console.log(`[API] Workflows started for ${data.count} games`);
+      
+      if (!data.count || data.count === 0) {
+        setError("No games found for this user");
+        setLoading(false);
+        return;
+      }
+      
       setGameCount(data.count);
       setLoading(false);
       setPolling(true);
+      
+      // Set the username we're polling for
+      currentPollingUsernameRef.current = username.trim().toLowerCase();
 
       // Start polling immediately, then every 5 seconds
       pollGames();
@@ -178,8 +232,9 @@ export default function Home() {
   };
 
   const formatDuration = (milliseconds: number | undefined): string => {
-    if (!milliseconds) return "N/A";
+    if (!milliseconds || isNaN(milliseconds)) return "N/A";
     const ms = typeof milliseconds === 'number' ? milliseconds : parseInt(String(milliseconds));
+    if (isNaN(ms) || ms < 0) return "N/A";
     const seconds = Math.floor(ms / 1000);
     const minutes = Math.floor(seconds / 60);
     const remainingSeconds = seconds % 60;
@@ -193,6 +248,7 @@ export default function Home() {
     if (!date) return "N/A";
     try {
       const dateObj = typeof date === 'number' ? new Date(date) : new Date(date);
+      if (isNaN(dateObj.getTime())) return "N/A";
       return dateObj.toLocaleDateString();
     } catch {
       return "N/A";
@@ -364,6 +420,10 @@ export default function Home() {
             width={32}
             height={32}
             className="flex-shrink-0"
+            onError={(e) => {
+              // Fallback if image fails to load
+              e.currentTarget.style.display = 'none';
+            }}
           />
           <input
             type="text"

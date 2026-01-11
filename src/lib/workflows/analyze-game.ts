@@ -16,6 +16,10 @@ interface GameAnalysisInput {
 export async function fetchPGN(gameId: string) {
   "use step";
   
+  if (!gameId || typeof gameId !== "string" || gameId.trim().length === 0) {
+    throw new FatalError("Invalid gameId provided to fetchPGN");
+  }
+  
   const pgnResponse = await fetch(
     `https://lichess.org/game/export/${gameId}.pgn`,
     {
@@ -26,10 +30,22 @@ export async function fetchPGN(gameId: string) {
   );
 
   if (!pgnResponse.ok) {
+    if (pgnResponse.status === 404) {
+      throw new FatalError(`Game not found: ${gameId}`);
+    }
+    if (pgnResponse.status === 429) {
+      throw new FatalError(`Rate limited by Lichess API`);
+    }
     throw new FatalError(`Failed to fetch PGN: ${pgnResponse.status}`);
   }
 
-  return await pgnResponse.text();
+  const pgnText = await pgnResponse.text();
+  
+  if (!pgnText || pgnText.trim().length === 0) {
+    throw new FatalError(`Empty PGN response for game ${gameId}`);
+  }
+
+  return pgnText;
 }
 
 // Step: Analyze game with Gemini AI

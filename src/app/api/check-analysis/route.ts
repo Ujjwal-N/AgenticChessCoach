@@ -26,6 +26,18 @@ export async function GET(request: NextRequest) {
       .sort({ updatedAt: -1 })
       .limit(100)
       .toArray();
+    
+    // Ensure documents is an array
+    if (!Array.isArray(documents)) {
+      console.warn("MongoDB returned non-array result");
+      return NextResponse.json({
+        success: true,
+        games: [],
+        count: 0,
+        withAnalysis: 0,
+        withoutAnalysis: 0,
+      });
+    }
 
     // Return full game data for frontend polling
     return NextResponse.json({

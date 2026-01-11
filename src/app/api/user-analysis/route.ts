@@ -26,6 +26,15 @@ export async function GET(request: NextRequest) {
         message: "No synthesized analysis available yet",
       });
     }
+    
+    // Defensive check for required fields
+    if (!userAnalysis.gamesAnalyzed || userAnalysis.gamesAnalyzed === 0) {
+      return NextResponse.json({
+        success: true,
+        hasAnalysis: false,
+        message: "Analysis not yet complete",
+      });
+    }
 
     return NextResponse.json({
       success: true,

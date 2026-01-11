@@ -279,7 +279,7 @@ Output format (JSON only):
         isValidLookAlike: parsedResponse?.isValidLookAlike === true,
         thematicMatch: typeof parsedResponse?.thematicMatch === "string" ? parsedResponse.thematicMatch : "",
         matchedOriginalGameIds: Array.isArray(parsedResponse?.matchedOriginalGameIds)
-          ? parsedResponse.matchedOriginalGameIds.filter((id) => typeof id === "string" && id.length > 0)
+          ? parsedResponse.matchedOriginalGameIds.filter((id: any) => typeof id === "string" && id.length > 0)
           : [],
         updatedAnalysis: typeof parsedResponse?.updatedAnalysis === "string" && parsedResponse.updatedAnalysis.length > 0
           ? parsedResponse.updatedAnalysis

@@ -59,7 +59,18 @@ export async function GET(request: NextRequest) {
           { status: 404 }
         );
       }
-      throw new Error(`Lichess API error: ${response.status}`);
+      if (response.status === 429) {
+        return NextResponse.json(
+          { error: "Rate limit exceeded. Please try again later." },
+          { status: 429 }
+        );
+      }
+      const errorText = await response.text().catch(() => "Unknown error");
+      console.error(`Lichess API error: ${response.status}`, errorText.substring(0, 200));
+      return NextResponse.json(
+        { error: `Failed to fetch games: ${response.status === 500 ? "Lichess service unavailable" : "Unknown error"}` },
+        { status: response.status >= 500 ? 503 : 500 }
+      );
     }
 
     // Parse NDJSON response (newline-delimited JSON)
@@ -68,10 +79,20 @@ export async function GET(request: NextRequest) {
       .trim()
       .split("\n")
       .filter((line) => line.trim())
-      .map((line) => JSON.parse(line));
+      .map((line) => {
+        try {
+          return JSON.parse(line);
+        } catch (parseError) {
+          console.warn("Failed to parse game line:", line.substring(0, 100));
+          return null;
+        }
+      })
+      .filter((game) => game !== null);
 
     // Process each game
-    const processedGames: ProcessedGame[] = rawGames.map((game: any) => {
+    const processedGames: ProcessedGame[] = rawGames
+      .filter((game: any) => game && game.id && game.players) // Filter out invalid games
+      .map((game: any) => {
       // Determine user color
       const userPlayedWhite = game.players.white?.user?.id?.toLowerCase() === username.toLowerCase();
       const userPlayedBlack = game.players.black?.user?.id?.toLowerCase() === username.toLowerCase();
@@ -90,8 +111,12 @@ export async function GET(request: NextRequest) {
         opponentRating = game.players.white?.rating;
       }
 
-      // Calculate game duration
-      const duration = game.lastMoveAt - game.createdAt;
+      // Calculate game duration (defensive check for valid timestamps)
+      const duration = (game.lastMoveAt && game.createdAt && 
+                       typeof game.lastMoveAt === 'number' && 
+                       typeof game.createdAt === 'number')
+        ? game.lastMoveAt - game.createdAt
+        : undefined;
 
       // Calculate rating difference
       const ratingDiff = userRating && opponentRating 
@@ -185,6 +210,10 @@ export async function GET(request: NextRequest) {
     // Each workflow will handle fetching PGN, analyzing with Gemini, and saving results
     // Workflows run in parallel, each with automatic retries
     selectedGames.forEach((game) => {
+      if (!game || !game.id) {
+        console.warn("Skipping invalid game in workflow trigger");
+        return;
+      }
       analyzeGameWorkflow({
         gameId: game.id,
         username,
