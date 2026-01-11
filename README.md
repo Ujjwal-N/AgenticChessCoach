@@ -1,14 +1,33 @@
-# Chess Game Analysis Platform
+# AgenticChessCoach
 
-A Next.js application that analyzes chess games from Lichess using AI to provide insights into player strengths, weaknesses, and playing patterns.
+**AgenticChessCoach** is an AI-powered chess analysis platform that uses LLMs to identify strategic gaps and patterns in your play, going beyond move-by-move analysis to surface fundamental understanding issues.
+
+## The Problem
+
+Current chess analysis tools are outdated. They focus on specific mistakes and move combinations instead of general strategy. For example, an existing analysis tool will highlight a mistake you made last Tuesday, without pointing out the fact that your overall strategy was wrong because you did not have an understanding of the position.
+
+## The Solution
+
+AgenticChessCoach solves this by incorporating LLMs into the flow for analyzing games and surfacing gaps in strategic understanding. This project uses parallel agents to analyze a large number of a user's chess games and save those insights in long-term memory. Once it has a general idea of a user's play, it smartly analyzes other games for similarities and generates an in-depth report quickly.
+
+For the hackathon, we built an onboarding flow for the rest of the project, focusing on channeling useful insights quickly and encouraging the user to try the rest of the app.
 
 ## Features
 
-- **Game Analysis**: Fetches and analyzes chess games from Lichess API
-- **AI-Powered Insights**: Uses Google Gemini AI to analyze games and identify patterns
-- **Player Profile**: Synthesizes analysis across multiple games to create comprehensive player profiles
-- **Look-Alike Detection**: Identifies games with similar thematic elements to original games
+- **Strategic Analysis**: Uses LLMs to identify patterns and strategic gaps, not just tactical mistakes
+- **Parallel Processing**: Analyzes multiple games simultaneously using Vercel Workflows
+- **Long-term Memory**: Stores insights in MongoDB to build comprehensive player profiles over time
+- **Pattern Recognition**: Identifies games with similar thematic elements to surface recurring issues
+- **Synthesized Insights**: Generates in-depth reports combining analysis across multiple games
 - **Real-time Updates**: Polls for analysis completion and updates the UI automatically
+
+## Future Enhancements
+
+One missing component is integrating a deterministic chess engine like Stockfish to verify the LLM's advice. The combination of a non-deterministic LLM and a deterministic engine for evaluating chess positions will lead to the most powerful chess analysis tool ever.
+
+## Broader Applications
+
+This problem can be generalized beyond LLMs. LLMs are very good at consuming data and analyzing human cognitive processes and intentions. If this model works for chess, it can work for any strategy game, and eventually work for any domain where a human's cognitive process needs to be analyzed and improved. Chess is the perfect starting point for this, as all state is neatly encoded as a sequence of moves.
 
 ## Prerequisites
 
@@ -77,8 +96,8 @@ npm start
 
 - **Next.js 16** - React framework
 - **TypeScript** - Type safety
-- **MongoDB** - Database for game and analysis storage
-- **Google Gemini AI** - Game analysis and synthesis
+- **MongoDB** - Database for game and analysis storage (long-term memory)
+- **Google Gemini AI** - Game analysis and strategic insight generation
 - **Vercel Workflows** - Background job processing with automatic retries
 - **Tailwind CSS** - Styling
 - **React Markdown** - Rendering analysis text
