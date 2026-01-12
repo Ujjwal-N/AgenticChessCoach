@@ -1,4 +1,6 @@
-# AgenticChessCoach
+# AgenticChessCoach - MongoDB Agentic Orchestration Hackathon Jan 2026
+
+## DEMO VIDEO: https://www.loom.com/share/26a0eb1ed58a477193f9ba11978b23d4
 
 **AgenticChessCoach** is an AI-powered chess analysis platform that uses LLMs to identify strategic gaps and patterns in your play, going beyond move-by-move analysis to surface fundamental understanding issues.
 
